@@ -13,7 +13,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
-import static org.springframework.security.config.Customizer.withDefaults;
 
 @Configuration
 @EnableMethodSecurity
@@ -23,20 +22,29 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
+                                "/api/swagger-ui.html",
                                 "/api/swagger-ui/**",
-                                "/api/api-docs/**",
                                 "/api/v3/api-docs/**",
                                 "/api/swagger-resources/**",
                                 "/api/webjars/**",
                                 "/api/h2-console/**"
                         ).permitAll()
                         .requestMatchers("/api/**").authenticated()
-                        .anyRequest().authenticated()
+                        .anyRequest().permitAll()
                 )
-                .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable))
-                .httpBasic(withDefaults());
+                .httpBasic(httpBasic -> httpBasic
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            if (request.getRequestURI().startsWith("/api")) {
+                                response.addHeader("WWW-Authenticate", "Basic realm=\"Realm\"");
+                                response.sendError(401, authException.getMessage());
+                            } else {
+                                response.setStatus(200);
+                            }
+                        })
+                );
 
         return http.build();
     }
